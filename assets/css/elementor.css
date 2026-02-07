@@ -1,0 +1,13 @@
+/* Elementor Widget Styles */
+.elementor-widget-ronginpran_checkout {
+    max-width: 100% !important;
+}
+
+/* Make sure it works in Elementor editor */
+.elementor-editor-active .rpc-checkout-container {
+    pointer-events: none;
+}
+
+.elementor-editor-active .rpc-submit-btn {
+    opacity: 0.6;
+}
