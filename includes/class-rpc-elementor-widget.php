@@ -51,7 +51,7 @@ class Elementor_RonginPran_Checkout_Widget extends \Elementor\Widget_Base {
             [
                 'label' => __('Dhaka Delivery Charge', 'ronginpran-checkout'),
                 'type' => \Elementor\Controls_Manager::NUMBER,
-                'default' => 70,
+                'default' => 0,
             ]
         );
 
@@ -60,7 +60,7 @@ class Elementor_RonginPran_Checkout_Widget extends \Elementor\Widget_Base {
             [
                 'label' => __('Outside Dhaka Delivery Charge', 'ronginpran-checkout'),
                 'type' => \Elementor\Controls_Manager::NUMBER,
-                'default' => 130,
+                'default' => 0,
             ]
         );
 

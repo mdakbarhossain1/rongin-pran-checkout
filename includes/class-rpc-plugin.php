@@ -38,6 +38,10 @@ class RPC_Plugin {
 
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
 
+        // Admin settings
+        add_action('admin_menu', [$this, 'register_admin_menu']);
+        add_action('admin_init', [$this, 'register_settings']);
+
         add_shortcode('ronginpran_checkout', [$this, 'shortcode_checkout']);
 
         add_action('wp_ajax_rpc_get_product', [$this, 'ajax_get_product']);
@@ -63,6 +67,147 @@ class RPC_Plugin {
             esc_html__('Rongin Pran Checkout requires WooCommerce to be installed and activated.', 'ronginpran-checkout') .
             '</p></div>';
     }
+
+
+    /**
+     * Get plugin settings (saved via Settings API)
+     */
+    public function get_settings(): array {
+        $defaults = [
+            'delivery_dhaka' => 70,
+            'delivery_outside' => 130,
+            'enable_quantity' => 1,
+            'whatsapp_number' => '',
+            'success_redirect' => 0,
+        ];
+        $opt = get_option('rpc_settings', []);
+        if (!is_array($opt)) $opt = [];
+        return array_merge($defaults, $opt);
+    }
+
+    /**
+     * Admin: register submenu under WooCommerce
+     */
+    public function register_admin_menu() {
+        if (!current_user_can('manage_woocommerce')) return;
+
+        add_submenu_page(
+            'woocommerce',
+            __('RonginPran Checkout', 'ronginpran-checkout'),
+            __('RonginPran Checkout', 'ronginpran-checkout'),
+            'manage_woocommerce',
+            'rpc-settings',
+            [$this, 'render_settings_page']
+        );
+    }
+
+    public function register_settings() {
+        register_setting('rpc_settings_group', 'rpc_settings', [$this, 'sanitize_settings']);
+
+        add_settings_section(
+            'rpc_main_section',
+            __('Checkout Settings', 'ronginpran-checkout'),
+            function () {
+                echo '<p>' . esc_html__('Configure default delivery charges and UX options.', 'ronginpran-checkout') . '</p>';
+            },
+            'rpc-settings'
+        );
+
+        add_settings_field(
+            'delivery_dhaka',
+            __('Dhaka Delivery Charge', 'ronginpran-checkout'),
+            [$this, 'field_number'],
+            'rpc-settings',
+            'rpc_main_section',
+            ['key' => 'delivery_dhaka', 'min' => 0, 'step' => 1]
+        );
+
+        add_settings_field(
+            'delivery_outside',
+            __('Outside Dhaka Delivery Charge', 'ronginpran-checkout'),
+            [$this, 'field_number'],
+            'rpc-settings',
+            'rpc_main_section',
+            ['key' => 'delivery_outside', 'min' => 0, 'step' => 1]
+        );
+
+        add_settings_field(
+            'enable_quantity',
+            __('Enable Quantity Selector', 'ronginpran-checkout'),
+            [$this, 'field_checkbox'],
+            'rpc-settings',
+            'rpc_main_section',
+            ['key' => 'enable_quantity']
+        );
+
+        add_settings_field(
+            'whatsapp_number',
+            __('WhatsApp Number (optional)', 'ronginpran-checkout'),
+            [$this, 'field_text'],
+            'rpc-settings',
+            'rpc_main_section',
+            ['key' => 'whatsapp_number', 'placeholder' => '8801XXXXXXXXX']
+        );
+
+        add_settings_field(
+            'success_redirect',
+            __('Redirect to Woo Thank You Page after order', 'ronginpran-checkout'),
+            [$this, 'field_checkbox'],
+            'rpc-settings',
+            'rpc_main_section',
+            ['key' => 'success_redirect']
+        );
+    }
+
+    public function sanitize_settings($input) {
+        $out = [];
+        $out['delivery_dhaka'] = isset($input['delivery_dhaka']) ? floatval($input['delivery_dhaka']) : 70;
+        $out['delivery_outside'] = isset($input['delivery_outside']) ? floatval($input['delivery_outside']) : 130;
+        $out['enable_quantity'] = !empty($input['enable_quantity']) ? 1 : 0;
+        $out['whatsapp_number'] = sanitize_text_field($input['whatsapp_number'] ?? '');
+        $out['success_redirect'] = !empty($input['success_redirect']) ? 1 : 0;
+        return $out;
+    }
+
+    public function render_settings_page() {
+        if (!current_user_can('manage_woocommerce')) return;
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__('RonginPran Checkout Settings', 'ronginpran-checkout') . '</h1>';
+        echo '<form method="post" action="options.php">';
+        settings_fields('rpc_settings_group');
+        do_settings_sections('rpc-settings');
+        submit_button();
+        echo '</form>';
+        echo '</div>';
+    }
+
+    public function field_number($args) {
+        $key = $args['key'];
+        $settings = $this->get_settings();
+        $val = esc_attr($settings[$key] ?? '');
+        $min = isset($args['min']) ? esc_attr($args['min']) : '0';
+        $step = isset($args['step']) ? esc_attr($args['step']) : '1';
+        echo '<input type="number" min="' . $min . '" step="' . $step . '" name="rpc_settings[' . esc_attr($key) . ']" value="' . $val . '" class="small-text" />';
+    }
+
+    public function field_text($args) {
+        $key = $args['key'];
+        $settings = $this->get_settings();
+        $val = esc_attr($settings[$key] ?? '');
+        $ph = esc_attr($args['placeholder'] ?? '');
+        echo '<input type="text" name="rpc_settings[' . esc_attr($key) . ']" value="' . $val . '" placeholder="' . $ph . '" class="regular-text" />';
+        if ($key === 'whatsapp_number') {
+            echo '<p class="description">' . esc_html__('Example: 8801XXXXXXXXX (no + sign). Used for WhatsApp support button on success screen.', 'ronginpran-checkout') . '</p>';
+        }
+    }
+
+    public function field_checkbox($args) {
+        $key = $args['key'];
+        $settings = $this->get_settings();
+        $checked = !empty($settings[$key]) ? 'checked' : '';
+        echo '<label><input type="checkbox" name="rpc_settings[' . esc_attr($key) . ']" value="1" ' . $checked . ' /> ' . esc_html__('Enabled', 'ronginpran-checkout') . '</label>';
+    }
+
 
     /**
      * Enqueue only on pages containing the shortcode
@@ -103,13 +248,31 @@ class RPC_Plugin {
         $atts = shortcode_atts([
             'product_id'        => 0,
             'title'             => 'অর্ডার করুন',
-            'delivery_dhaka'    => '70',
-            'delivery_outside'  => '130',
+            'delivery_dhaka'    => '0',
+            'delivery_outside'  => '0',
         ], $atts, 'ronginpran_checkout');
 
         $atts['product_id'] = absint($atts['product_id']);
+
+        // Defaults from settings (can be overridden via shortcode/widget)
+        $settings = $this->get_settings();
         $atts['delivery_dhaka'] = floatval($atts['delivery_dhaka']);
         $atts['delivery_outside'] = floatval($atts['delivery_outside']);
+
+        if ($atts['delivery_dhaka'] <= 0) {
+            $atts['delivery_dhaka'] = floatval($settings['delivery_dhaka'] ?? 70);
+        }
+        if ($atts['delivery_outside'] <= 0) {
+            $atts['delivery_outside'] = floatval($settings['delivery_outside'] ?? 130);
+        }
+
+        $atts['_enable_quantity'] = !empty($settings['enable_quantity']) ? 1 : 0;
+        $atts['_whatsapp_number'] = (string) ($settings['whatsapp_number'] ?? '');
+        $atts['_success_redirect'] = !empty($settings['success_redirect']) ? 1 : 0;
+
+        // Signed delivery payload to prevent tampering
+        $charge_payload = $atts['product_id'] . ':' . $atts['delivery_dhaka'] . ':' . $atts['delivery_outside'];
+        $charge_hash = wp_hash($charge_payload);
 
         // Unique ID per instance (important for Elementor multi-widget pages)
         $instance_id = 'rpc_' . wp_generate_uuid4();
@@ -218,14 +381,35 @@ class RPC_Plugin {
         $product_id = absint($_POST['product_id'] ?? 0);
         $variation_id = absint($_POST['variation_id'] ?? 0);
 
-        // Delivery zone only (server computes charge!)
+        // Delivery zone (server computes charge)
         $delivery_zone = sanitize_key($_POST['delivery_zone'] ?? 'dhaka'); // dhaka|outside
         if (!in_array($delivery_zone, ['dhaka', 'outside'], true)) {
             $delivery_zone = 'dhaka';
         }
 
-        // delivery charges (you can make these settings later)
-        $delivery_charge = ($delivery_zone === 'outside') ? 130 : 70;
+        // Quantity
+        $quantity = isset($_POST['quantity']) ? absint($_POST['quantity']) : 1;
+        if ($quantity < 1) $quantity = 1;
+        if ($quantity > 20) $quantity = 20;
+
+        // Delivery charges: use signed payload if provided, otherwise settings defaults
+        $settings = $this->get_settings();
+        $dhaka_charge = floatval($settings['delivery_dhaka'] ?? 70);
+        $outside_charge = floatval($settings['delivery_outside'] ?? 130);
+
+        $charge_payload = sanitize_text_field($_POST['charge_payload'] ?? '');
+        $charge_hash = sanitize_text_field($_POST['charge_hash'] ?? '');
+
+        if ($charge_payload && $charge_hash && hash_equals(wp_hash($charge_payload), $charge_hash)) {
+            $parts = explode(':', $charge_payload);
+            if (count($parts) === 3) {
+                $dhaka_charge = floatval($parts[1]);
+                $outside_charge = floatval($parts[2]);
+            }
+        }
+
+        $delivery_charge = ($delivery_zone === 'outside') ? $outside_charge : $dhaka_charge;
+
 
         // Validation
         $errors = [];
@@ -278,7 +462,7 @@ class RPC_Plugin {
 
             $order = wc_create_order();
 
-            $item_id = $order->add_product($line_item_product, 1);
+            $item_id = $order->add_product($line_item_product, $quantity);
 
             // Addresses
             $order->set_billing_first_name($first_name);
@@ -307,6 +491,7 @@ class RPC_Plugin {
             // Helpful meta
             $order->update_meta_data('_rpc_delivery_zone', $delivery_zone);
             $order->update_meta_data('_rpc_source', 'ronginpran_checkout');
+            $order->update_meta_data('_rpc_quantity', $quantity);
 
             if ($item_id && $variation_id > 0) {
                 $order_item = $order->get_item($item_id);
@@ -323,6 +508,8 @@ class RPC_Plugin {
                 'message' => 'Order created successfully!',
                 'order_id' => $order->get_id(),
                 'order_number' => $order->get_order_number(),
+                'success_redirect' => !empty($settings['success_redirect']) ? 1 : 0,
+                'thankyou_url' => !empty($settings['success_redirect']) ? $order->get_checkout_order_received_url() : '',
             ]);
         } catch (Exception $e) {
             wp_send_json_error(['message' => 'Error: ' . $e->getMessage()], 500);

@@ -61,3 +61,10 @@ rongin-pran-checkout/
   widgets/      # Widgets (if used)
   ronginpran-checkout.php  # Main plugin bootstrap file
 ```
+
+## What's New in 1.1.0
+
+- Admin settings page under WooCommerce
+- Dynamic variation attributes (works with any variable product)
+- Invalid combination handling + stock-friendly UX
+- Quantity selector + live order summary

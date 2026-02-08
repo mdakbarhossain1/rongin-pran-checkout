@@ -3,7 +3,7 @@
  * Plugin Name: Rongin Pran Variable Product Checkout
  * Plugin URI: https://ronginpran.com
  * Description: Simple variable product checkout system for Elementor
- * Version: 1.0.3
+ * Version: 1.1.0
  * Author: Akbar Hossain
  * License: GPL v2 or later
  * Text Domain: ronginpran-checkout
@@ -12,7 +12,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('RPC_VERSION', '1.0.3');
+define('RPC_VERSION', '1.1.0');
 define('RPC_PLUGIN_FILE', __FILE__);
 define('RPC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RPC_PLUGIN_URL', plugin_dir_url(__FILE__));

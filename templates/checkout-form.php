@@ -1,7 +1,7 @@
 <?php
 /**
  * Template: Checkout form
- * Variables available: $atts, $instance_id
+ * Variables available: $atts, $instance_id, $charge_payload, $charge_hash
  */
 if (!defined('ABSPATH')) exit;
 ?>
@@ -11,16 +11,29 @@ if (!defined('ABSPATH')) exit;
      data-product-id="<?php echo esc_attr($atts['product_id']); ?>"
      data-delivery-dhaka="<?php echo esc_attr($atts['delivery_dhaka']); ?>"
      data-delivery-outside="<?php echo esc_attr($atts['delivery_outside']); ?>"
+     data-charge-payload="<?php echo esc_attr($charge_payload); ?>"
+     data-charge-hash="<?php echo esc_attr($charge_hash); ?>"
+     data-enable-quantity="<?php echo esc_attr($atts['_enable_quantity'] ?? 1); ?>"
+     data-whatsapp-number="<?php echo esc_attr($atts['_whatsapp_number'] ?? ''); ?>"
 >
     <h2 class="rpc-checkout-title"><?php echo esc_html($atts['title']); ?></h2>
 
     <div class="rpc-price-box">
-        <span class="rpc-price-label">প্রোডাক্ট মূল্য</span>
-        <span class="rpc-price-value">৳ 0</span>
+        <div class="rpc-summary-row">
+            <span class="rpc-price-label">প্রোডাক্ট মূল্য</span>
+            <span class="rpc-price-value">৳ 0</span>
+        </div>
+
+        <div class="rpc-summary-row rpc-qty-row" style="display:none;">
+            <span class="rpc-price-label">পরিমাণ</span>
+            <span class="rpc-qty-label">1</span>
+        </div>
 
         <div class="rpc-divider">
-            <span class="rpc-price-label">ডেলিভারি চার্জ</span>
-            <span class="rpc-price-label rpc-delivery-charge">৳ <?php echo esc_html($atts['delivery_dhaka']); ?></span>
+            <div class="rpc-summary-row">
+                <span class="rpc-price-label">ডেলিভারি চার্জ</span>
+                <span class="rpc-price-label rpc-delivery-charge">৳ <?php echo esc_html($atts['delivery_dhaka']); ?></span>
+            </div>
         </div>
 
         <div class="rpc-total">
@@ -29,20 +42,17 @@ if (!defined('ABSPATH')) exit;
         </div>
     </div>
 
-    <div class="rpc-select-wrapper">
-        <div class="rpc-form-group">
-            <label class="rpc-form-label">রং নির্বাচন করুন</label>
-            <select class="rpc-form-input rpc-color-select" name="color" required>
-                <option value="">লোড হচ্ছে...</option>
-            </select>
+    <div class="rpc-qty-wrapper" style="display:none;">
+        <label class="rpc-form-label">পরিমাণ</label>
+        <div class="rpc-qty-control">
+            <button type="button" class="rpc-qty-btn rpc-qty-minus" aria-label="Decrease quantity">−</button>
+            <input type="number" class="rpc-form-input rpc-qty-input" min="1" max="20" value="1" inputmode="numeric">
+            <button type="button" class="rpc-qty-btn rpc-qty-plus" aria-label="Increase quantity">+</button>
         </div>
+    </div>
 
-        <div class="rpc-form-group">
-            <label class="rpc-form-label">সাইজ নির্বাচন করুন</label>
-            <select class="rpc-form-input rpc-size-select" name="size" required>
-                <option value="">লোড হচ্ছে...</option>
-            </select>
-        </div>
+    <div class="rpc-attributes-wrapper">
+        <div class="rpc-attributes-loading">লোড হচ্ছে...</div>
     </div>
 
     <div class="rpc-variation-info"></div>
@@ -92,6 +102,8 @@ if (!defined('ABSPATH')) exit;
     </form>
 
     <div class="rpc-message" style="display:none;"></div>
+
+    <div class="rpc-success-actions" style="display:none;"></div>
 
     <div class="rpc-footer-note">
         <p>💵 Cash on Delivery — পণ্য হাতে পেয়ে টাকা পরিশোধ করুন</p>

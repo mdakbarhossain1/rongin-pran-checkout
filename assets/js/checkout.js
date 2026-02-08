@@ -6,12 +6,16 @@
     return "৳ " + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
-  function updateSelect($select, options, placeholder) {
-    $select.empty();
-    $select.append(`<option value="">${placeholder}</option>`);
-    options.forEach((opt) => {
-      if (opt) $select.append(`<option value="${opt}">${opt}</option>`);
-    });
+  function unique(arr) {
+    return Array.from(new Set(arr.filter(Boolean)));
+  }
+
+  function normalizePhoneValue(value) {
+    let v = (value || "").replace(/\D/g, "");
+    if (v.startsWith("880")) v = "0" + v.slice(3);
+    if (v.length && !v.startsWith("0")) v = "0" + v;
+    if (v.length > 11) v = v.slice(0, 11);
+    return v;
   }
 
   function initContainer($container) {
@@ -21,25 +25,46 @@
         dhaka: parseFloat($container.data("delivery-dhaka")) || 70,
         outside: parseFloat($container.data("delivery-outside")) || 130,
       },
+      charge_payload: $container.data("charge-payload") || "",
+      charge_hash: $container.data("charge-hash") || "",
+      enable_quantity: parseInt($container.data("enable-quantity"), 10) === 1,
+      whatsapp: String($container.data("whatsapp-number") || "").trim(),
     };
 
     const state = {
       product: null,
       variations: [],
+      attributeMeta: {}, // slug -> {label, options}
+      selectedAttributes: {}, // slug -> option
       selectedVariation: null,
       selectedDelivery: "dhaka",
+      qty: 1,
       isLoading: false,
     };
 
     const $priceValue = $container.find(".rpc-price-value");
     const $totalPrice = $container.find(".rpc-total-price");
     const $deliveryChargeLabel = $container.find(".rpc-delivery-charge");
-    const $colorSelect = $container.find(".rpc-color-select");
-    const $sizeSelect = $container.find(".rpc-size-select");
     const $variationInfo = $container.find(".rpc-variation-info");
+    const $attrsWrap = $container.find(".rpc-attributes-wrapper");
+    const $qtyWrap = $container.find(".rpc-qty-wrapper");
+    const $qtyInput = $container.find(".rpc-qty-input");
+    const $qtyLabelRow = $container.find(".rpc-qty-row");
+    const $qtyLabel = $container.find(".rpc-qty-label");
     const $form = $container.find(".rpc-order-form");
     const $submitBtn = $container.find(".rpc-submit-btn");
     const $message = $container.find(".rpc-message");
+    const $successActions = $container.find(".rpc-success-actions");
+
+    function setQty(q) {
+      let qty = parseInt(q, 10);
+      if (isNaN(qty) || qty < 1) qty = 1;
+      if (qty > 20) qty = 20;
+      state.qty = qty;
+      $qtyInput.val(qty);
+      $qtyLabel.text(String(qty));
+      updateTotal();
+    }
 
     function showLoading(text) {
       $submitBtn
@@ -56,91 +81,266 @@
       setTimeout(() => $message.hide(), 10000);
     }
 
-    function updateTotal() {
-      let total = 0;
+    function setSubmitEnabled(enabled) {
+      $submitBtn.prop("disabled", !enabled || state.isLoading);
+    }
 
-      if (state.selectedVariation && state.selectedVariation.price) {
-        total += parseFloat(state.selectedVariation.price);
-      } else if (state.product && state.product.price) {
-        total += parseFloat(state.product.price);
-      } else {
-        total += 1200;
+    function getBasePrice() {
+      if (state.selectedVariation && state.selectedVariation.price)
+        return parseFloat(state.selectedVariation.price);
+      if (state.product && state.product.price)
+        return parseFloat(state.product.price);
+      return 1200;
+    }
+
+    function updateTotal() {
+      const base = getBasePrice();
+      const delivery =
+        config.delivery[state.selectedDelivery] || config.delivery.dhaka;
+      const total = base * state.qty + delivery;
+
+      $priceValue.text(formatPrice(base));
+      $deliveryChargeLabel.text("৳ " + delivery);
+      $totalPrice.text(formatPrice(total));
+    }
+
+    function renderAttributesUI() {
+      // If simple product or no attributes, hide wrapper
+      const attrSlugs = Object.keys(state.attributeMeta);
+      if (attrSlugs.length === 0) {
+        $attrsWrap.html("");
+        return;
       }
 
-      total += config.delivery[state.selectedDelivery] || config.delivery.dhaka;
+      // Build grid
+      const html = attrSlugs
+        .map((slug) => {
+          const meta = state.attributeMeta[slug] || {};
+          const label = meta.label || slug;
+          return `
+            <div class="rpc-form-group">
+              <label class="rpc-form-label">${label}</label>
+              <select class="rpc-form-input rpc-attr-select" data-attr="${slug}">
+                <option value="">নির্বাচন করুন</option>
+              </select>
+            </div>
+          `;
+        })
+        .join("");
 
-      $totalPrice.text(formatPrice(total));
-      $deliveryChargeLabel.text(
-        "৳ " +
-          (config.delivery[state.selectedDelivery] || config.delivery.dhaka),
+      $attrsWrap.html(`<div class="rpc-attributes-grid">${html}</div>`);
+      updateAllAttributeOptions();
+    }
+
+    function variationMatchesSelection(variation, selection) {
+      if (!variation.attributes) return false;
+      for (const slug in selection) {
+        const expected = selection[slug];
+        if (!expected) continue;
+
+        const found = variation.attributes.find(
+          (a) => String(a.name).toLowerCase() === String(slug).toLowerCase(),
+        );
+        if (!found) return false;
+        if (String(found.option) !== String(expected)) return false;
+      }
+      return true;
+    }
+
+    function findExactVariation() {
+      const slugs = Object.keys(state.attributeMeta);
+      if (slugs.length === 0) return null;
+
+      // all selected?
+      for (const s of slugs) {
+        if (!state.selectedAttributes[s]) return null;
+      }
+
+      return (
+        state.variations.find((v) =>
+          variationMatchesSelection(v, state.selectedAttributes),
+        ) || null
       );
     }
 
-    function useFallbackData() {
-      updateSelect(
-        $colorSelect,
-        ["লাল", "নীল", "কালো", "সাদা", "সবুজ"],
-        "রং নির্বাচন করুন",
+    function getAllowedOptionsForAttr(attrSlug) {
+      // Allowed options given other selected attrs
+      const otherSelection = { ...state.selectedAttributes };
+      delete otherSelection[attrSlug];
+
+      const matches = state.variations.filter((v) =>
+        variationMatchesSelection(v, otherSelection),
       );
-      updateSelect(
-        $sizeSelect,
-        ["S", "M", "L", "XL", "XXL"],
-        "সাইজ নির্বাচন করুন",
-      );
-      $priceValue.text("৳ ১,২০০");
+
+      const options = [];
+      matches.forEach((v) => {
+        const a = (v.attributes || []).find(
+          (x) =>
+            String(x.name).toLowerCase() === String(attrSlug).toLowerCase(),
+        );
+        if (a && a.option) options.push(a.option);
+      });
+
+      return unique(options);
+    }
+
+    function updateAllAttributeOptions() {
+      const $selects = $container.find(".rpc-attr-select");
+
+      $selects.each(function () {
+        const $sel = $(this);
+        const slug = String($sel.data("attr") || "");
+        const allowed = getAllowedOptionsForAttr(slug);
+
+        const current = $sel.val();
+        $sel.empty();
+        $sel.append(`<option value="">নির্বাচন করুন</option>`);
+        allowed.forEach((opt) => {
+          $sel.append(`<option value="${opt}">${opt}</option>`);
+        });
+
+        // Keep selected if still allowed
+        if (current && allowed.includes(current)) {
+          $sel.val(current);
+        } else {
+          $sel.val("");
+          state.selectedAttributes[slug] = "";
+        }
+      });
+
+      // Determine variation
+      const exact = findExactVariation();
+      if (exact) {
+        state.selectedVariation = exact;
+        $variationInfo.show().text(buildSelectionText());
+        setSubmitEnabled(true);
+      } else {
+        state.selectedVariation = null;
+
+        // If partial selection leads to zero matches, show hint
+        const anyMatches = state.variations.some((v) =>
+          variationMatchesSelection(v, state.selectedAttributes),
+        );
+        if (
+          !anyMatches &&
+          Object.values(state.selectedAttributes).some(Boolean)
+        ) {
+          $variationInfo
+            .show()
+            .text("এই কম্বিনেশনটি পাওয়া যাচ্ছে না / স্টক নেই");
+          setSubmitEnabled(false);
+        } else {
+          $variationInfo.hide();
+          setSubmitEnabled(true);
+        }
+      }
+
       updateTotal();
     }
 
-    function updateVariationSelects(variations) {
-      const colors = new Set();
-      const sizes = new Set();
+    function buildSelectionText() {
+      const pairs = [];
+      Object.keys(state.attributeMeta).forEach((slug) => {
+        const meta = state.attributeMeta[slug] || {};
+        const label = meta.label || slug;
+        const val = state.selectedAttributes[slug];
+        if (val) pairs.push(`${label}: ${val}`);
+      });
+      return pairs.length ? `নির্বাচিত: ${pairs.join(", ")}` : "";
+    }
 
-      variations.forEach((v) => {
-        if (!v.attributes) return;
+    function setupEvents() {
+      // Delivery click
+      $container.on("click", ".rpc-delivery-option", function () {
+        $container.find(".rpc-delivery-option").removeClass("selected");
+        $(this).addClass("selected");
+        state.selectedDelivery = $(this).data("value") || "dhaka";
+        updateTotal();
+      });
 
-        v.attributes.forEach((a) => {
-          const name = (a.name || "").toLowerCase();
-          if (name.includes("color") || name.includes("pa_color"))
-            colors.add(a.option);
-          if (name.includes("size") || name.includes("pa_size"))
-            sizes.add(a.option);
+      // Dynamic attribute change
+      $container.on("change", ".rpc-attr-select", function () {
+        const slug = String($(this).data("attr") || "");
+        state.selectedAttributes[slug] = $(this).val();
+        updateAllAttributeOptions();
+      });
+
+      // Qty events
+      $container.on("click", ".rpc-qty-plus", function () {
+        setQty(state.qty + 1);
+      });
+      $container.on("click", ".rpc-qty-minus", function () {
+        setQty(state.qty - 1);
+      });
+      $qtyInput.on("input", function () {
+        setQty($(this).val());
+      });
+
+      // Phone normalize
+      $container.find(".rpc-phone").on("input", function () {
+        $(this).val(normalizePhoneValue($(this).val()));
+      });
+
+      // Submit
+      $form.on("submit", submitOrder);
+    }
+
+    function useFallbackSimple() {
+      // If product cannot load, keep minimal form with qty and totals
+      $attrsWrap.html("");
+      state.variations = [];
+      state.attributeMeta = {};
+      state.selectedAttributes = {};
+      state.selectedVariation = null;
+      updateTotal();
+    }
+
+    function buildAttributeMetaFromPayload(payload) {
+      const meta = {};
+
+      // 1) From payload.attributes (label + slug + options)
+      (payload.attributes || []).forEach((a) => {
+        const slug = String(a.slug || "").toLowerCase();
+        if (!slug) return;
+        meta[slug] = {
+          label: a.label || slug,
+          options: a.options || [],
+        };
+      });
+
+      // 2) Ensure slugs that exist in variations are present
+      const slugsFromVars = {};
+      (payload.variations || []).forEach((v) => {
+        (v.attributes || []).forEach((x) => {
+          const s = String(x.name || "").toLowerCase();
+          if (!s) return;
+          slugsFromVars[s] = true;
         });
       });
 
-      updateSelect($colorSelect, Array.from(colors), "রং নির্বাচন করুন");
-      updateSelect($sizeSelect, Array.from(sizes), "সাইজ নির্বাচন করুন");
-    }
+      Object.keys(slugsFromVars).forEach((slug) => {
+        if (!meta[slug]) {
+          meta[slug] = { label: slug, options: [] };
+        }
+      });
 
-    function updateProductInfo(payload) {
-      const price =
-        payload.product.price || payload.product.regular_price || "1200";
-      $priceValue.text(formatPrice(price));
-
-      state.variations = payload.variations || [];
-
-      if (state.variations.length > 0) {
-        updateVariationSelects(state.variations);
-      } else if (payload.attributes && payload.attributes.length > 0) {
-        // fallback attributes
-        payload.attributes.forEach((attr) => {
-          const label = (attr.label || "").toLowerCase();
-          const slug = (attr.slug || "").toLowerCase();
-          if (label.includes("color") || slug.includes("color")) {
-            updateSelect($colorSelect, attr.options || [], "রং নির্বাচন করুন");
-          }
-          if (label.includes("size") || slug.includes("size")) {
-            updateSelect($sizeSelect, attr.options || [], "সাইজ নির্বাচন করুন");
-          }
+      // Fill options from variations (only in-stock variations are returned by PHP)
+      Object.keys(meta).forEach((slug) => {
+        const opts = [];
+        (payload.variations || []).forEach((v) => {
+          const a = (v.attributes || []).find(
+            (x) => String(x.name).toLowerCase() === slug,
+          );
+          if (a && a.option) opts.push(a.option);
         });
-      } else {
-        useFallbackData();
-      }
+        meta[slug].options = unique(opts);
+      });
 
-      updateTotal();
+      return meta;
     }
 
     function loadProduct() {
-      if (config.product_id <= 0) return useFallbackData();
+      if (config.product_id <= 0) return useFallbackSimple();
 
       showLoading("পণ্য লোড হচ্ছে...");
 
@@ -155,74 +355,44 @@
         },
         success: function (res) {
           if (res && res.success && res.data) {
-            state.product = res.data.product;
-            updateProductInfo(res.data);
+            state.product = res.data.product || null;
+            state.variations = res.data.variations || [];
+
+            // Simple product: remove attribute UI
+            if (
+              !state.product ||
+              state.product.type !== "variable" ||
+              state.variations.length === 0
+            ) {
+              $attrsWrap.html("");
+              state.attributeMeta = {};
+              state.selectedAttributes = {};
+              state.selectedVariation = null;
+              updateTotal();
+              hideLoading();
+              return;
+            }
+
+            state.attributeMeta = buildAttributeMetaFromPayload(res.data);
+
+            // initialize selection state
+            state.selectedAttributes = {};
+            Object.keys(state.attributeMeta).forEach(
+              (slug) => (state.selectedAttributes[slug] = ""),
+            );
+
+            renderAttributesUI();
+            updateTotal();
           } else {
-            useFallbackData();
+            useFallbackSimple();
           }
           hideLoading();
         },
         error: function () {
-          useFallbackData();
+          useFallbackSimple();
           hideLoading();
         },
       });
-    }
-
-    function findVariation() {
-      const color = ($colorSelect.val() || "").trim();
-      const size = ($sizeSelect.val() || "").trim();
-
-      if (!color || !size) {
-        state.selectedVariation = null;
-        $variationInfo.hide();
-        updateTotal();
-        return;
-      }
-
-      const match = state.variations.find((v) => {
-        if (!v.attributes) return false;
-
-        let hasColor = false;
-        let hasSize = false;
-
-        v.attributes.forEach((a) => {
-          const name = (a.name || "").toLowerCase();
-          if (
-            (name.includes("color") || name.includes("pa_color")) &&
-            a.option === color
-          )
-            hasColor = true;
-          if (
-            (name.includes("size") || name.includes("pa_size")) &&
-            a.option === size
-          )
-            hasSize = true;
-        });
-
-        return hasColor && hasSize;
-      });
-
-      if (match) {
-        state.selectedVariation = match;
-        $priceValue.text(formatPrice(match.price));
-        $variationInfo.show().text(`নির্বাচিত: ${color}, ${size}`);
-      } else {
-        state.selectedVariation = null;
-        $variationInfo.hide();
-      }
-
-      updateTotal();
-    }
-
-    function resetForm() {
-      $form[0].reset();
-      $colorSelect.val("");
-      $sizeSelect.val("");
-      $variationInfo.hide();
-      state.selectedVariation = null;
-      state.selectedDelivery = "dhaka";
-      updateTotal();
     }
 
     function validateForm() {
@@ -247,26 +417,30 @@
       if (!$phone.val().trim()) err($phone, "মোবাইল নম্বর আবশ্যক");
       if (!$addr.val().trim()) err($addr, "ঠিকানা আবশ্যক");
 
-      // only require color/size if selects have options beyond placeholder
-      if ($colorSelect.find("option").length > 1 && !$colorSelect.val())
-        err($colorSelect, "রং নির্বাচন করুন");
-      if ($sizeSelect.find("option").length > 1 && !$sizeSelect.val())
-        err($sizeSelect, "সাইজ নির্বাচন করুন");
-
       const phone = $phone.val().trim();
       if (phone && !/^01[3-9]\d{8}$/.test(phone)) {
         err($phone, "সঠিক মোবাইল নম্বর দিন");
       }
 
-      return ok;
-    }
+      // If variable product, require attribute selection
+      if (state.product && state.product.type === "variable") {
+        const slugs = Object.keys(state.attributeMeta);
+        slugs.forEach((slug) => {
+          if (!state.selectedAttributes[slug]) {
+            err(
+              $container.find(`.rpc-attr-select[data-attr="${slug}"]`),
+              "নির্বাচন করুন",
+            );
+          }
+        });
 
-    function normalizePhone($input) {
-      let value = ($input.val() || "").replace(/\D/g, "");
-      if (value.startsWith("880")) value = "0" + value.slice(3);
-      if (!value.startsWith("0") && value.length) value = "0" + value;
-      if (value.length > 11) value = value.substring(0, 11);
-      $input.val(value);
+        if (!state.selectedVariation) {
+          ok = false;
+          $variationInfo.show().text("দয়া করে সঠিক কম্বিনেশন নির্বাচন করুন");
+        }
+      }
+
+      return ok;
     }
 
     async function submitOrder(e) {
@@ -281,9 +455,12 @@
         email: $container.find(".rpc-email").val().trim(),
         product_id: config.product_id,
         variation_id: state.selectedVariation ? state.selectedVariation.id : 0,
-
-        // IMPORTANT: send only delivery zone (server computes charge)
         delivery_zone: state.selectedDelivery,
+        quantity: state.qty,
+
+        // signed charge info
+        charge_payload: config.charge_payload,
+        charge_hash: config.charge_hash,
       };
 
       try {
@@ -306,7 +483,43 @@
             `🎉 অর্ডার সফল হয়েছে! অর্ডার নম্বর: ${res.data.order_number}`,
             "success",
           );
-          resetForm();
+
+          // success actions
+          $successActions.html("");
+          if (config.whatsapp) {
+            const wa = config.whatsapp.replace(/\D/g, "");
+            const waText = encodeURIComponent(
+              `Order: ${res.data.order_number}`,
+            );
+            $successActions
+              .html(
+                `<a class="rpc-wa-btn" target="_blank" rel="noopener" href="https://wa.me/${wa}?text=${waText}">WhatsApp Support</a>`,
+              )
+              .show();
+          }
+
+          // Redirect to Thank You page (optional)
+          if (res.data && res.data.success_redirect && res.data.thankyou_url) {
+            setTimeout(() => {
+              window.location.href = res.data.thankyou_url;
+            }, 800);
+            return;
+          }
+
+          // Reset
+          $form[0].reset();
+          state.qty = 1;
+          $qtyInput.val(1);
+          $qtyLabel.text("1");
+          if (state.product && state.product.type === "variable") {
+            Object.keys(state.selectedAttributes).forEach(
+              (k) => (state.selectedAttributes[k] = ""),
+            );
+            $container.find(".rpc-attr-select").val("");
+            updateAllAttributeOptions();
+          }
+          $variationInfo.hide();
+          updateTotal();
         } else {
           const msg =
             res && res.data && res.data.message
@@ -322,26 +535,16 @@
       }
     }
 
-    // Events (scoped)
-    $colorSelect.on("change", findVariation);
-    $sizeSelect.on("change", findVariation);
+    // Boot UX toggles
+    if (config.enable_quantity) {
+      $qtyWrap.show();
+      $qtyLabelRow.show();
+    }
 
-    $container.on("click", ".rpc-delivery-option", function () {
-      $container.find(".rpc-delivery-option").removeClass("selected");
-      $(this).addClass("selected");
-      state.selectedDelivery = $(this).data("value") || "dhaka";
-      updateTotal();
-    });
-
-    $container.find(".rpc-phone").on("input", function () {
-      normalizePhone($(this));
-    });
-
-    $form.on("submit", submitOrder);
-
-    // Boot
+    setupEvents();
     loadProduct();
     updateTotal();
+    setQty(1);
   }
 
   $(document).ready(function () {
