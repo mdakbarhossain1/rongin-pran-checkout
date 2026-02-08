@@ -46,10 +46,12 @@ if (!defined('ABSPATH')) exit;
         <label class="rpc-form-label">পরিমাণ</label>
         <div class="rpc-qty-control">
             <button type="button" class="rpc-qty-btn rpc-qty-minus" aria-label="Decrease quantity">−</button>
-            <input type="number" class="rpc-form-input rpc-qty-input" min="1" max="20" value="1" inputmode="numeric">
+            <input type="number" class="rpc-qty-input" min="1" max="20" value="1" inputmode="numeric">
             <button type="button" class="rpc-qty-btn rpc-qty-plus" aria-label="Increase quantity">+</button>
         </div>
     </div>
+
+    <div class="rpc-section-title">পণ্যের ভ্যারিয়েশন নির্বাচন করুন</div>
 
     <div class="rpc-attributes-wrapper">
         <div class="rpc-attributes-loading">লোড হচ্ছে...</div>
@@ -60,7 +62,7 @@ if (!defined('ABSPATH')) exit;
     <div class="rpc-delivery-options">
         <div class="rpc-delivery-option selected" data-value="dhaka">
             <input type="radio" class="rpc-radio" name="rpc_delivery_<?php echo esc_attr($instance_id); ?>" value="dhaka" checked>
-            <label style="flex:1;cursor:pointer;">
+            <label style="flex:1;cursor:pointer; display:block;">
                 <strong>ঢাকার ভিতরে</strong>
                 <div class="rpc-muted">ডেলিভারি চার্জ: ৳ <?php echo esc_html($atts['delivery_dhaka']); ?></div>
             </label>
@@ -68,7 +70,7 @@ if (!defined('ABSPATH')) exit;
 
         <div class="rpc-delivery-option" data-value="outside">
             <input type="radio" class="rpc-radio" name="rpc_delivery_<?php echo esc_attr($instance_id); ?>" value="outside">
-            <label style="flex:1;cursor:pointer;">
+            <label style="flex:1;cursor:pointer; display:block;">
                 <strong>ঢাকার বাইরে</strong>
                 <div class="rpc-muted">ডেলিভারি চার্জ: ৳ <?php echo esc_html($atts['delivery_outside']); ?></div>
             </label>

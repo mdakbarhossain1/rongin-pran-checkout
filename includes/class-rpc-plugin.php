@@ -215,13 +215,25 @@ class RPC_Plugin {
     public function enqueue_assets() {
         if (is_admin() || !is_singular()) return;
 
-        global $post;
-        if (!$post instanceof WP_Post) return;
+        $post_id = get_queried_object_id();
+        if (!$post_id) return;
 
-        if (!has_shortcode($post->post_content, 'ronginpran_checkout')) {
-            return;
+        $should_enqueue = false;
+
+        // 1) If shortcode exists in content
+        $post = get_post($post_id);
+        if ($post instanceof WP_Post && has_shortcode($post->post_content, 'ronginpran_checkout')) {
+            $should_enqueue = true;
         }
 
+        // 2) If the page is built with Elementor
+        if (!$should_enqueue && $this->is_built_with_elementor($post_id)) {
+            $should_enqueue = true;
+        }
+
+        if (!$should_enqueue) return;
+
+        // Enqueue CSS
         wp_enqueue_style(
             'rpc-checkout-style',
             RPC_PLUGIN_URL . 'assets/css/checkout.css',
@@ -229,6 +241,7 @@ class RPC_Plugin {
             RPC_VERSION
         );
 
+        // Enqueue JS
         wp_enqueue_script(
             'rpc-checkout-script',
             RPC_PLUGIN_URL . 'assets/js/checkout.js',
@@ -522,4 +535,17 @@ class RPC_Plugin {
         require_once RPC_PLUGIN_DIR . 'includes/class-rpc-elementor-widget.php';
         $widgets_manager->register(new \Elementor_RonginPran_Checkout_Widget());
     }
+
+    private function is_built_with_elementor($post_id): bool {
+    // Elementor not installed/loaded
+    if (!did_action('elementor/loaded')) return false;
+    if (!class_exists('\Elementor\Plugin')) return false;
+
+    try {
+        $doc = \Elementor\Plugin::$instance->documents->get($post_id);
+        return ($doc && $doc->is_built_with_elementor());
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
 }
