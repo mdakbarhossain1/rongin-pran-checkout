@@ -50,6 +50,8 @@ class RPC_Plugin {
         add_action('wp_ajax_rpc_create_order', [$this, 'ajax_create_order']);
         add_action('wp_ajax_nopriv_rpc_create_order', [$this, 'ajax_create_order']);
 
+        add_action('woocommerce_thankyou', [$this, 'render_thankyou_block'], 20);
+
         // Elementor
         add_action('elementor/widgets/register', [$this, 'register_elementor_widget']);
     }
@@ -255,6 +257,12 @@ class RPC_Plugin {
             'nonce'    => wp_create_nonce('rpc_secure_nonce'),
             'debug'    => current_user_can('manage_options'),
         ]);
+
+        $is_thankyou = function_exists('is_order_received_page') && is_order_received_page();
+
+        if (!$is_thankyou && !has_shortcode($post->post_content, 'ronginpran_checkout')) {
+            return;
+        }
     }
 
     public function shortcode_checkout($atts) {
@@ -381,6 +389,82 @@ class RPC_Plugin {
 
         wp_send_json_success($data);
     }
+
+    public function render_thankyou_block($order_id) {
+        if (!$order_id) return;
+
+        $order = wc_get_order($order_id);
+        if (!$order) return;
+
+        // Only show for plugin orders
+        $source = (string) $order->get_meta('_rpc_source');
+        if ($source !== 'ronginpran_checkout') return;
+
+        $settings = $this->get_settings();
+        $whatsapp = preg_replace('/\D+/', '', (string)($settings['whatsapp_number'] ?? ''));
+
+        $delivery_zone = (string) $order->get_meta('_rpc_delivery_zone');
+        $delivery_zone_label = ($delivery_zone === 'outside')
+            ? __('ঢাকার বাইরে', 'ronginpran-checkout')
+            : __('ঢাকার ভিতরে', 'ronginpran-checkout');
+
+        $phone = (string) $order->get_billing_phone();
+        $name  = (string) $order->get_billing_first_name();
+        $order_number = $order->get_order_number();
+
+        // WhatsApp link (optional)
+        $wa_url = '';
+        if (!empty($whatsapp)) {
+            $msg = sprintf(
+                "Hi, I need help with my order.\nOrder: %s\nName: %s\nPhone: %s",
+                $order_number,
+                $name,
+                $phone
+            );
+            $wa_url = 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode($msg);
+        }
+
+        ?>
+        <div class="rpc-thankyou-card">
+            <div class="rpc-thankyou-header">
+                <h2 class="rpc-thankyou-title"><?php echo esc_html__('✅ অর্ডার কনফার্ম হয়েছে!', 'ronginpran-checkout'); ?></h2>
+                <p class="rpc-thankyou-sub">
+                    <?php echo esc_html__('আমাদের টিম ২৪ ঘণ্টার মধ্যে কনফার্মেশন কল করবে।', 'ronginpran-checkout'); ?>
+                </p>
+            </div>
+
+            <div class="rpc-thankyou-grid">
+                <div class="rpc-thankyou-box">
+                    <div class="rpc-thankyou-label"><?php echo esc_html__('অর্ডার নম্বর', 'ronginpran-checkout'); ?></div>
+                    <div class="rpc-thankyou-value">#<?php echo esc_html($order_number); ?></div>
+                </div>
+
+                <div class="rpc-thankyou-box">
+                    <div class="rpc-thankyou-label"><?php echo esc_html__('ডেলিভারি এলাকা', 'ronginpran-checkout'); ?></div>
+                    <div class="rpc-thankyou-value"><?php echo esc_html($delivery_zone_label); ?></div>
+                </div>
+            </div>
+
+            <div class="rpc-thankyou-actions">
+                <?php if ($wa_url): ?>
+                    <a class="rpc-thankyou-btn rpc-thankyou-btn-wa" href="<?php echo esc_url($wa_url); ?>" target="_blank" rel="noopener">
+                        <?php echo esc_html__('WhatsApp Support', 'ronginpran-checkout'); ?>
+                    </a>
+                <?php endif; ?>
+
+                <a class="rpc-thankyou-btn rpc-thankyou-btn-home" href="<?php echo esc_url(home_url('/')); ?>">
+                    <?php echo esc_html__('Back to Home', 'ronginpran-checkout'); ?>
+                </a>
+            </div>
+
+            <div class="rpc-thankyou-note">
+                <p>💵 <?php echo esc_html__('Cash on Delivery — পণ্য হাতে পেয়ে টাকা পরিশোধ করুন', 'ronginpran-checkout'); ?></p>
+                <p>📦 <?php echo esc_html__('ডেলিভারির সময়: ১–৩ কার্যদিবস (সাধারণত)', 'ronginpran-checkout'); ?></p>
+            </div>
+        </div>
+        <?php
+    }
+
 
     public function ajax_create_order() {
         if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'rpc_secure_nonce')) {
