@@ -29,8 +29,8 @@
 
 @media (max-width: 768px){
   .rpc-checkout-container{
-    padding: 16px;
-    margin: 10px;
+    padding: 10px;
+    margin: 5px;
     border-radius: 16px;
   }
 }
@@ -128,15 +128,19 @@
   cursor: pointer;
   display: grid;
   place-items: center;
+  align-content: start;
   transition: all .18s ease;
 }
 
 .rpc-qty-minus{ border-right: 1px solid #e2e8f0; }
 .rpc-qty-plus{ border-left: 1px solid #e2e8f0; }
 
+.rpc-qty-minus:hover{   background: #fff7ed; color: #ea580c; border-right: 1px solid #fff7ed; }
+
 .rpc-qty-btn:hover{
   background: #fff7ed;
   color: #ea580c;
+  border-left: 1px solid #fff7ed;
 }
 
 .rpc-qty-btn:active{
@@ -176,6 +180,10 @@
 }
 .rpc-qty-input[type=number]{
   -moz-appearance: textfield;
+  border: none;
+  box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.00);
+  font-size: 22px;
+  font-weight: 600;
 }
 
 /* Label spacing */
@@ -419,3 +427,108 @@
     z-index: 20;
   }
 }
+
+/* ===== RPC Thank You Card ===== */
+.rpc-thankyou-card{
+  margin: 24px 0;
+  padding: 18px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 30px rgba(2,6,23,0.08);
+}
+
+.rpc-thankyou-header{
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.rpc-thankyou-title{
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.rpc-thankyou-sub{
+  margin: 0;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.rpc-thankyou-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 14px 0 16px;
+}
+
+@media (max-width: 768px){
+  .rpc-thankyou-grid{ grid-template-columns: 1fr; }
+}
+
+.rpc-thankyou-box{
+  padding: 14px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.rpc-thankyou-label{
+  font-size: 13px;
+  font-weight: 900;
+  color: #64748b;
+}
+
+.rpc-thankyou-value{
+  font-size: 18px;
+  font-weight: 950;
+  color: #0f172a;
+  margin-top: 4px;
+}
+
+.rpc-thankyou-actions{
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.rpc-thankyou-btn{
+  display: inline-block;
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-weight: 950;
+  text-decoration: none;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0f172a;
+  transition: all .18s ease;
+}
+
+.rpc-thankyou-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(2,6,23,0.08);
+}
+
+.rpc-thankyou-btn-wa{
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.rpc-thankyou-btn-home{
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.rpc-thankyou-note{
+  margin-top: 14px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 14px;
+}
+/* End of Rongin Pran Checkout CSS */
